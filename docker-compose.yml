@@ -1,0 +1,67 @@
+version: '3.7'
+services:
+  mysql:
+    image: mysql:5.7
+    ports:
+      - "3306:3306"
+    command: mysqld --character-set-server=utf8 --collation-server=utf8_unicode_ci
+    # container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db
+      TZ: 'Asia/Tokyo'
+
+  web:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    # image: 557719627116.dkr.ecr.ap-northeast-1.amazonaws.com/living-link-board:latest
+    ports:
+      - 8080:8080
+    command: >
+      sh -c '
+        ./bin/wait_db_activation.sh
+        bee run
+      '
+    # container_name: board
+    # volumes:
+    #   - ./controllers:/board/controllers
+    #   - ./models:/board/models
+    #   - ./routers:/board/routers
+    #   - ./services:/board/services
+    #   - ./static:/board/static
+    #   - ./tests:/board/tests
+    #   - ./views:/board/views
+    depends_on:
+      - mysql
+      - minio
+
+  minio:
+    image: minio/minio
+    command: server /data
+    ports:
+      - 9000:9000
+    environment:
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password
+    entrypoint: >
+      /bin/sh -c "
+        mkdir -p /data/.minio.sys/buckets;
+        cp -r /policies/* /data/.minio.sys/;
+        cp -r /export/* /data/;
+        find /data -name '.keep' -type f -delete;
+        rm -rf /data/board-test/*
+        /usr/bin/minio server /data;
+      "
+    volumes:
+      - ./minio/data:/data
+      - ./minio/export:/export
+      - ./minio/config:/root/.minio
+      - ./minio/policies:/policies
+
+  redis:
+    image: redis:6.0.9
+    command: redis-server
+    ports:
+      - "6379:6379"
